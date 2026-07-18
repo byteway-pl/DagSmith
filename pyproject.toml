@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dagsmith"
+name = "airflow-dagsmith"
 dynamic = ["version"]
 description = "Visual block-based and code DAG editor inside the Apache Airflow 3 UI"
 readme = "README.md"

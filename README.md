@@ -43,7 +43,7 @@ Airflow web UI:
 ## Installation
 
 ```bash
-pip install dagsmith   # in the environment running the Airflow api-server
+pip install airflow-dagsmith   # in the environment running the Airflow api-server
 ```
 
 The plugin registers itself via the `airflow.plugins` entry point — don't copy anything
