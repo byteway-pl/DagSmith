@@ -21,7 +21,7 @@ jobs:
       - name: Build the UI bundle
         working-directory: frontend
         run: |
-          npm ci
+          npm install
           npm run build
 
       - uses: actions/setup-python@v5
