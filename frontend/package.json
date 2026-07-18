@@ -1,0 +1,39 @@
+{
+  "name": "dagsmith-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --port 5173 --strictPort",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^3.34.0",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/merge": "^6.12.2",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
+    "@emotion/react": "^11.14.0",
+    "@uiw/react-codemirror": "^4.25.11",
+    "@xyflow/react": "^12.11.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-icons": "^5.7.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.0.1",
+    "@vitejs/plugin-react-swc": "^4.0.1",
+    "happy-dom": "^20.10.6",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.0",
+    "vite-plugin-css-injected-by-js": "^4.0.1",
+    "vitest": "^4.1.10"
+  }
+}

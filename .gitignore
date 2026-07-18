@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Built frontend bundle (committed only on release)
+src/dagsmith/static/*
+!src/dagsmith/static/.gitkeep
+
+# Dev environment
+dev/pgdata/
+dev/logs/
+# runtime sandbox: DagSmith deploys here and it is its own git repo
+# (git-on-deploy testing); seed it from dev/seed-dags/
+dev/dags/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
