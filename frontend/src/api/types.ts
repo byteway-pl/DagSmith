@@ -16,6 +16,12 @@ export type FileInfo = {
   size: number;
   mtime: string;
   has_draft: boolean;
+  deployed: boolean;
+  dag_id: string | null;
+  description: string | null;
+  tags: string[];
+  owner: string | null;
+  created_by: string | null;
   team: string | null;
   editable: boolean;
 };

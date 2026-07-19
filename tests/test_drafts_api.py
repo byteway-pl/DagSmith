@@ -159,6 +159,44 @@ def test_files_listing_marks_drafts(api_client, bundle_dir: Path) -> None:
     assert files["plain.py"]["has_draft"] is False
 
 
+def test_files_listing_includes_dag_metadata(api_client, bundle_dir: Path) -> None:
+    (bundle_dir / "meta_dag.py").write_text(
+        "from airflow import DAG\n"
+        "with DAG(\n"
+        "    dag_id='sales_etl',\n"
+        "    description='Loads sales data nightly',\n"
+        "    tags=['sales', 'prod'],\n"
+        "    default_args={'owner': 'adrian'},\n"
+        "):\n"
+        "    pass\n"
+    )
+    files = {f["rel_path"]: f for f in api_client.get("/api/v1/files?bundle=test").json()}
+    row = files["meta_dag.py"]
+    assert row["dag_id"] == "sales_etl"
+    assert row["description"] == "Loads sales data nightly"
+    assert row["tags"] == ["sales", "prod"]
+    assert row["owner"] == "adrian"
+
+
+def test_files_listing_tolerates_unparseable_file(api_client, bundle_dir: Path) -> None:
+    (bundle_dir / "not_a_dag.py").write_text("x = 1 + 2\n")
+    files = {f["rel_path"]: f for f in api_client.get("/api/v1/files?bundle=test").json()}
+    row = files["not_a_dag.py"]
+    assert row["dag_id"] is None
+    assert row["tags"] == []
+
+
+def test_files_listing_surfaces_undeployed_new_draft(api_client, bundle_dir: Path) -> None:
+    # A brand-new DAG saved as a draft but never deployed has no file on
+    # disk at all — it must still show up, flagged as not deployed, instead
+    # of silently disappearing from the file browser.
+    _create_draft(api_client, "brand_new.py")
+    files = {f["rel_path"]: f for f in api_client.get("/api/v1/files?bundle=test").json()}
+    assert "brand_new.py" in files
+    assert files["brand_new.py"]["deployed"] is False
+    assert files["brand_new.py"]["has_draft"] is True
+
+
 def test_reload_from_bundle_file(api_client, bundle_dir: Path) -> None:
     (bundle_dir / "live.py").write_text("# deployed version\nx = 1\n")
     draft = _create_draft(api_client, "live.py")

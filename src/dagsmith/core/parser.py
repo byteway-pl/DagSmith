@@ -700,3 +700,45 @@ def parse_source(source: str) -> ParsedDag:
 def parse_graph(source: str) -> tuple[GraphModel, list[str]]:
     parsed = parse_source(source)
     return parsed.graph, parsed.warnings
+
+
+def parse_meta(source: str) -> DagMeta | None:
+    """Extract only the DAG's metadata (dag_id/description/tags/owner…).
+
+    Lightweight sibling of ``parse_source`` for listings: it reads the
+    ``@dag``/``with DAG(...)`` call without building the task graph, and
+    returns ``None`` for anything it can't confidently read (arbitrary
+    Python, multi-DAG files, syntax errors) instead of raising.
+    """
+    try:
+        module = cst.parse_module(source)
+    except Exception:
+        return None
+
+    containers = _find_containers(module)
+    if not containers:
+        return None
+    style, _index, container = containers[0]
+    try:
+        if style == "decorator":
+            assert isinstance(container, cst.FunctionDef)
+            decorator = _decorator_named(container, "dag")
+            call = (
+                decorator.decorator
+                if decorator is not None and isinstance(decorator.decorator, cst.Call)
+                else None
+            )
+            meta, _extras = _meta_from_call(module, call, container.name.value, [])
+        else:
+            assert isinstance(container, cst.With)
+            dag_call = next(
+                item.item
+                for item in container.items
+                if isinstance(item.item, cst.Call)
+                and isinstance(item.item.func, cst.Name)
+                and item.item.func.value == "DAG"
+            )
+            meta, _extras = _meta_from_call(module, dag_call, None, [])
+    except (ParseError, StopIteration, AssertionError):
+        return None
+    return meta

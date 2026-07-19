@@ -31,6 +31,12 @@ Airflow web UI:
   an isolated subprocess, every path is confined to the bundle root, and every deploy
   is audit-logged.
 
+## Demo
+
+[![Watch the DagSmith demo on YouTube](https://img.youtube.com/vi/WHri9xcfpwo/maxresdefault.jpg)](https://youtu.be/WHri9xcfpwo)
+
+▶️ **[Watch the demo on YouTube](https://youtu.be/WHri9xcfpwo)**
+
 ## Requirements
 
 | Component | Version |

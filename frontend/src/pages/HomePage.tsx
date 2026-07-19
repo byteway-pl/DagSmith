@@ -100,21 +100,7 @@ export const HomePage: FC<PluginProps> = () => {
       ) : undefined}
 
       <Box flex="1" minH="0">
-        {fileOpen ? (
-          <EditorView />
-        ) : (
-          <Flex h="100%" gap={4}>
-            <Box w="360px" minW="280px" h="100%">
-              <FileBrowser />
-            </Box>
-            <Flex flex="1" align="center" justify="center" borderWidth="1px" borderRadius="md">
-              <Text color="fg.muted">
-                Select a file to edit, or create a new DAG. Work is saved as versioned
-                drafts — the .py file changes only when you hit Deploy.
-              </Text>
-            </Flex>
-          </Flex>
-        )}
+        {fileOpen ? <EditorView /> : <FileBrowser />}
       </Box>
     </Flex>
   );

@@ -24,6 +24,15 @@ class FileInfo(BaseModel):
     size: int
     mtime: datetime
     has_draft: bool = False
+    # False for a draft that was never deployed — no file exists on disk yet.
+    deployed: bool = True
+    # Parsed DAG metadata (None when the file isn't a recognizable single DAG).
+    dag_id: str | None = None
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    owner: str | None = None
+    # Who created this via DagSmith (draft author), if known.
+    created_by: str | None = None
     # Owning team (by path prefix) and whether the current user may edit it.
     team: str | None = None
     editable: bool = True
