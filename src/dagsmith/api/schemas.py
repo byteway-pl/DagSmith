@@ -87,6 +87,7 @@ class VersionDetail(VersionInfo):
 
 
 class DraftCreate(BaseModel):
+    template_id: str | None = Field(default=None, max_length=100)
     bundle: str
     rel_path: str = Field(pattern=r".+\.py$")
 
@@ -107,6 +108,8 @@ class ValidationIssue(BaseModel):
 
 
 class ValidateRequest(BaseModel):
+    bundle: str | None = None
+    rel_path: str | None = None
     source: str
     # Deep validation imports the file in a subprocess (executes top-level code).
     deep: bool = True
@@ -194,6 +197,10 @@ class FileTeamResult(BaseModel):
     bundle: str
     rel_path: str
     team: str | None
+
+
+class GitPushRequest(BaseModel):
+    message: str | None = Field(default=None, max_length=5000)
 
 
 class GitPushResult(BaseModel):

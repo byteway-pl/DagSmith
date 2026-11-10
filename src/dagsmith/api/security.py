@@ -27,6 +27,19 @@ class ApiUser:
     username: str | None
     airflow_user: Any
 
+    @property
+    def git_name(self) -> str:
+        parts = [getattr(self.airflow_user, field, None) for field in ("first_name", "last_name")]
+        full_name = " ".join(
+            part.strip() for part in parts if isinstance(part, str) and part.strip()
+        )
+        return full_name or self.username or "dagsmith"
+
+    @property
+    def git_email(self) -> str | None:
+        email = getattr(self.airflow_user, "email", None)
+        return email.strip() if isinstance(email, str) and email.strip() else None
+
 
 COOKIE_NAME_JWT_TOKEN = "_token"  # airflow.api_fastapi.core_api.security.COOKIE_NAME_JWT_TOKEN
 

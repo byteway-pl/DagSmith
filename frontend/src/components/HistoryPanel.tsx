@@ -19,6 +19,9 @@ export const HistoryPanel: FC = () => {
   const history = useStore((s) => s.history);
   const source = useStore((s) => s.source);
   const restore = useStore((s) => s.restore);
+  const readOnly = useStore((s) => s.readOnly);
+  const canEdit = useStore((s) => s.config?.can_edit);
+  const [deleting, setDeleting] = useState(false);
   const [preview, setPreview] = useState<VersionDetail | undefined>();
 
   if (!draft || !history) {
@@ -52,6 +55,21 @@ export const HistoryPanel: FC = () => {
               </Text>
             ) : undefined}
             <Flex gap={2} mt={2}>
+              {canEdit && !readOnly && version.version_no !== draft.head_version_no ? (
+                <Button size="2xs" variant="outline" colorPalette="red" disabled={deleting}
+                  onClick={() => {
+                    if (!window.confirm(`Delete history v${version.version_no}? This cannot be undone.`)) return;
+                    setDeleting(true);
+                    void api.deleteVersion(draft.id, version.version_no)
+                      .then(() => api.versions(draft.id))
+                      .then((items) => {
+                        useStore.setState({ history: items });
+                        if (preview?.version_no === version.version_no) setPreview(undefined);
+                      })
+                      .catch((err: unknown) => useStore.getState().setNotice({ type: "error", text: String(err) }))
+                      .finally(() => setDeleting(false));
+                  }}>Delete</Button>
+              ) : undefined}
               <Button
                 size="2xs"
                 variant="outline"

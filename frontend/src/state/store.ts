@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { layoutGraph } from "src/lib/layout";
 
 import { api, ApiError } from "src/api/client";
 import type {
@@ -21,8 +22,9 @@ export type EditorMode = "code" | "visual" | "split";
 /** Carry canvas positions over from the previous graph (matched by node id). */
 const mergePositions = (parsed: GraphModel, previous?: GraphModel): GraphModel => {
   if (!previous) {
-    return parsed;
+    return layoutGraph(parsed);
   }
+  const automatic = layoutGraph(parsed);
   const positions = new Map(
     previous.nodes
       .filter((node) => node.position !== null)
@@ -32,7 +34,7 @@ const mergePositions = (parsed: GraphModel, previous?: GraphModel): GraphModel =
     ...parsed,
     nodes: parsed.nodes.map((node) => ({
       ...node,
-      position: node.position ?? positions.get(node.id) ?? null,
+      position: node.position ?? positions.get(node.id) ?? automatic.nodes.find((n) => n.id === node.id)!.position,
     })),
   };
 };
@@ -49,6 +51,8 @@ type EditorState = {
   draft?: DraftDetail;
   source: string;
   dirty: boolean;
+  autosaveEnabled: boolean;
+  setAutosaveEnabled: (enabled: boolean) => void;
   saving: boolean;
   readOnly: boolean;
   liveFileHash: string | null;
@@ -73,7 +77,7 @@ type EditorState = {
   init: () => Promise<void>;
   selectBundle: (name: string) => Promise<void>;
   refreshFiles: () => Promise<void>;
-  openFile: (relPath: string, forceReadOnly?: boolean) => Promise<void>;
+  openFile: (relPath: string, forceReadOnly?: boolean, templateId?: string) => Promise<void>;
   closeFile: () => void;
   setSource: (text: string) => void;
   setMode: (mode: EditorMode) => void;
@@ -110,6 +114,14 @@ export const useStore = create<EditorState>((set, get) => ({
   connections: [],
   files: [],
   source: "",
+  autosaveEnabled: (() => {
+    try { return localStorage.getItem("dagsmith:autosave") !== "off"; }
+    catch { return true; }
+  })(),
+  setAutosaveEnabled: (enabled) => {
+    try { localStorage.setItem("dagsmith:autosave", enabled ? "on" : "off"); } catch { /* storage unavailable */ }
+    set({ autosaveEnabled: enabled });
+  },
   dirty: false,
   saving: false,
   readOnly: true,
@@ -166,14 +178,14 @@ export const useStore = create<EditorState>((set, get) => ({
     }
   },
 
-  openFile: async (relPath, forceReadOnly = false) => {
+  openFile: async (relPath, forceReadOnly = false, templateId) => {
     const { selectedBundle, config } = get();
     if (!selectedBundle) {
       return;
     }
     try {
       if (config?.can_edit && !forceReadOnly) {
-        const draft = await api.openDraft(selectedBundle, relPath);
+        const draft = await api.openDraft(selectedBundle, relPath, templateId);
         const layoutGraph = (draft.layout as { graph?: GraphModel } | null)?.graph;
         const parsed = await api.parse(draft.source);
         const graph = parsed.graph ? mergePositions(parsed.graph, layoutGraph) : undefined;
@@ -211,6 +223,8 @@ export const useStore = create<EditorState>((set, get) => ({
   },
 
   closeFile: () => {
+    if (get().saving) return;
+    if (get().dirty && !window.confirm("Discard unsaved changes and return to files?")) return;
     set({
       draft: undefined,
       source: "",
@@ -232,7 +246,7 @@ export const useStore = create<EditorState>((set, get) => ({
   setSource: (text) => {
     set({
       source: text,
-      dirty: text !== get().draft?.source ? true : get().dirty,
+      dirty: text !== get().draft?.source,
     });
     scheduleParse();
   },
@@ -431,7 +445,7 @@ export const useStore = create<EditorState>((set, get) => ({
 
   save: async (kind, message) => {
     const { draft, source, dirty, saving } = get();
-    if (!draft || saving || (kind === "auto" && !dirty)) {
+    if (!draft || saving || !dirty) {
       return;
     }
     set({ saving: true });
@@ -528,7 +542,7 @@ export const useStore = create<EditorState>((set, get) => ({
   validate: async () => {
     set({ validating: true });
     try {
-      set({ validation: await api.validate(get().source), validating: false });
+      set({ validation: await api.validate(get().source, true, get().draft?.bundle, get().draft?.rel_path), validating: false });
     } catch (err) {
       set({ validating: false, notice: errorNotice(err) });
     }
@@ -710,9 +724,11 @@ export const startAutosave = (): void => {
     return;
   }
   const tick = () => {
-    const { config, dirty, draft, saving } = useStore.getState();
+    const { config, dirty, draft, saving, autosaveEnabled, readOnly } = useStore.getState();
     const interval = config?.autosave_interval ?? 0;
     if (
+      autosaveEnabled &&
+      !readOnly &&
       interval > 0 &&
       dirty &&
       draft &&

@@ -17,7 +17,11 @@ import type {
 } from "./types";
 
 // Same-origin requests: the Airflow session cookie (_token) is sent automatically.
-const BASE = "/dagsmith/api/v1";
+// Airflow's <base> includes the deployment prefix; dev mode has no <base>.
+const BASE = new URL(
+  "dagsmith/api/v1",
+  document.querySelector("base")?.href ?? window.location.origin + "/",
+).pathname;
 
 export class ApiError extends Error {
   constructor(
@@ -66,7 +70,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+export interface DagTemplate { id: string; name: string; source: string }
+
 export const api = {
+  templates: () => request<DagTemplate[]>("/templates"),
+  saveTemplate: (id: string, body: { name: string; source: string }) =>
+    request<DagTemplate>(id ? `/templates/${id}` : "/templates", {
+      method: id ? "PUT" : "POST", body: JSON.stringify(body),
+    }),
+  deleteTemplate: (id: string) => request<void>(`/templates/${id}`, { method: "DELETE" }),
   config: () => request<ConfigInfo>("/config"),
   bundles: () => request<BundleInfo[]>("/bundles"),
   files: (bundle: string) =>
@@ -75,10 +87,10 @@ export const api = {
     request<FileContent>(
       `/files/${encodePath(relPath)}?bundle=${encodeURIComponent(bundle)}`,
     ),
-  openDraft: (bundle: string, relPath: string) =>
+  openDraft: (bundle: string, relPath: string, templateId?: string) =>
     request<DraftDetail>("/drafts", {
       method: "POST",
-      body: JSON.stringify({ bundle, rel_path: relPath }),
+      body: JSON.stringify({ bundle, rel_path: relPath, template_id: templateId }),
     }),
   getDraft: (draftId: string) => request<DraftDetail>(`/drafts/${draftId}`),
   saveVersion: (
@@ -95,6 +107,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  deleteVersion: (draftId: string, versionNo: number) =>
+    request<void>(`/drafts/${draftId}/versions/${versionNo}`, { method: "DELETE" }),
   versions: (draftId: string) => request<VersionInfo[]>(`/drafts/${draftId}/versions`),
   version: (draftId: string, versionNo: number) =>
     request<VersionDetail>(`/drafts/${draftId}/versions/${versionNo}`),
@@ -110,10 +124,10 @@ export const api = {
         version_no: versionNo ?? null,
       }),
     }),
-  validate: (source: string, deep = true) =>
+  validate: (source: string, deep = true, bundle?: string, relPath?: string) =>
     request<ValidateResult>("/validate", {
       method: "POST",
-      body: JSON.stringify({ source, deep }),
+      body: JSON.stringify({ source, deep, bundle, rel_path: relPath }),
     }),
   operators: () => request<BlockDef[]>("/operators"),
   connections: () => request<ConnectionInfo[]>("/connections"),
@@ -143,8 +157,10 @@ export const api = {
     request<undefined>(`/teams/${teamId}/members/${encodeURIComponent(username)}`, {
       method: "DELETE",
     }),
-  gitPush: (draftId: string) =>
-    request<GitPushResult>(`/drafts/${draftId}/git-push`, { method: "POST" }),
+  gitPush: (draftId: string, message?: string) =>
+    request<GitPushResult>(`/drafts/${draftId}/git-push`, {
+      method: "POST", body: JSON.stringify({ message }),
+    }),
   setFileTeam: (bundle: string, relPath: string, teamId: string | null) =>
     request<{ bundle: string; rel_path: string; team: string | null }>("/file-team", {
       method: "PUT",

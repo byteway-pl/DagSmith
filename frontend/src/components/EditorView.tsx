@@ -8,12 +8,14 @@ import {
   Spinner,
   Stack,
   Text,
+  Textarea,
 } from "@chakra-ui/react";
 import type { FC } from "react";
 import { useEffect, useState } from "react";
 import { FiGitBranch } from "react-icons/fi";
 
 import { api } from "src/api/client";
+import { layoutGraph } from "src/lib/layout";
 
 import { Canvas } from "src/components/Canvas";
 import { CodePanel } from "src/components/CodePanel";
@@ -50,7 +52,9 @@ export const EditorView: FC = () => {
   const source = useStore((s) => s.source);
   const readOnly = useStore((s) => s.readOnly);
   const config = useStore((s) => s.config);
+  const autosaveEnabled = useStore((s) => s.autosaveEnabled);
   const saving = useStore((s) => s.saving);
+  const dirty = useStore((s) => s.dirty);
   const validating = useStore((s) => s.validating);
   const deploying = useStore((s) => s.deploying);
   const validation = useStore((s) => s.validation);
@@ -77,6 +81,8 @@ export const EditorView: FC = () => {
   } = useStore.getState();
   const [showDagSettings, setShowDagSettings] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [showCommit, setShowCommit] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
   const [confirmNoGitDeploy, setConfirmNoGitDeploy] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const liveFileHash = useStore((s) => s.liveFileHash);
@@ -114,7 +120,8 @@ export const EditorView: FC = () => {
     }
     setPushing(true);
     try {
-      const result = await api.gitPush(draft.id);
+      const result = await api.gitPush(draft.id, commitMessage.trim() || undefined);
+      if (!result.error) { setShowCommit(false); setCommitMessage(""); }
       useStore.setState({
         notice: result.error
           ? { type: "error", text: `Git: ${result.error}` }
@@ -147,6 +154,31 @@ export const EditorView: FC = () => {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [save]);
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!useStore.getState().dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const onNavigate = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(target instanceof HTMLAnchorElement) || target.target === "_blank" || target.hasAttribute("download")) return;
+      if (target.href === window.location.href || !useStore.getState().dirty) return;
+      if (!window.confirm("Discard unsaved changes and leave this page?")) {
+        event.preventDefault(); event.stopPropagation();
+      } else {
+        useStore.setState({ dirty: false });
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", onNavigate, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", onNavigate, true);
+    };
+  }, []);
 
   return (
     <Flex direction="column" h="100%" minH="0">
@@ -184,11 +216,26 @@ export const EditorView: FC = () => {
         {draft ? (
           <HStack gap={2}>
             {graph && mode !== "code" ? (
+              <Button size="sm" variant="outline" onClick={() => {
+                useStore.getState().mutateGraph(layoutGraph, true);
+              }}>Auto layout</Button>
+            ) : undefined}
+            {graph && mode !== "code" ? (
               <Button size="sm" variant="outline" onClick={() => setShowDagSettings(true)}>
                 DAG settings
               </Button>
             ) : undefined}
-            <Button size="sm" onClick={() => void save("manual")} loading={saving}>
+            <label style={{ fontSize: "13px", whiteSpace: "nowrap" }}>
+              <input type="checkbox" checked={autosaveEnabled}
+                disabled={!config?.autosave_interval}
+                onChange={(event) => useStore.getState().setAutosaveEnabled(event.target.checked)} />
+              {" Auto save"}
+            </label>
+            <Button size="sm" variant="outline" disabled={!dirty || saving || regenerating}
+              onClick={() => {
+                if (window.confirm("Discard unsaved changes and reload the last saved draft?")) void reloadDraft();
+              }}>Discard changes</Button>
+            <Button size="sm" onClick={() => void save("manual")} loading={saving} disabled={!dirty}>
               Save
             </Button>
             <Button size="sm" variant="outline" onClick={() => void validate()} loading={validating}>
@@ -222,7 +269,7 @@ export const EditorView: FC = () => {
                 size="sm"
                 variant="outline"
                 colorPalette="green"
-                onClick={() => void gitPush()}
+                onClick={() => { setCommitMessage(""); setShowCommit(true); }}
                 loading={pushing}
                 title={
                   owningTeam?.git_remote_url
@@ -237,13 +284,34 @@ export const EditorView: FC = () => {
         ) : undefined}
       </Flex>
 
+      {showCommit && draft ? (
+        <Modal title="Commit & push">
+          <Text fontSize="sm" mb={2}>Commit the deployed file to Git. Leave the message blank to use the default.</Text>
+          <Textarea aria-label="Commit message" rows={4} maxLength={5000}
+            placeholder={`dagsmith: update ${draft.rel_path} (draft v${draft.head_version_no})`}
+            value={commitMessage} disabled={pushing}
+            onChange={(event) => setCommitMessage(event.target.value)} />
+          <Flex justify="flex-end" gap={2} mt={4}>
+            <Button variant="outline" disabled={pushing} onClick={() => setShowCommit(false)}>Cancel</Button>
+            <Button loading={pushing} onClick={() => void gitPush()}>Commit & push</Button>
+          </Flex>
+        </Modal>
+      ) : undefined}
+
       {parseWarnings.length > 0 && mode !== "code" ? (
-        <Box mb={2} p={2} borderRadius="md" bg="orange.subtle">
-          {parseWarnings.map((warning, index) => (
-            <Text key={index} fontSize="xs">
-              ⚠ {warning}
-            </Text>
-          ))}
+        <Box mb={2} p={2} borderRadius="md" bg="orange.subtle" flexShrink={0}>
+          <details>
+            <summary style={{ cursor: "pointer", fontSize: "13px" }}>
+              ⚠ Editing notices ({parseWarnings.length})
+            </summary>
+            <Box mt={2} maxH="160px" overflowY="auto">
+              {parseWarnings.map((warning, index) => (
+                <Text key={index} fontSize="xs" py={0.5} overflowWrap="anywhere">
+                  ⚠ {warning}
+                </Text>
+              ))}
+            </Box>
+          </details>
         </Box>
       ) : undefined}
 

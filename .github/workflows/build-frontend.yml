@@ -1,0 +1,51 @@
+name: Build frontend for pip installs
+
+on:
+  push:
+    branches: [main, develop/custom-template]
+    paths:
+      - frontend/**
+      - .github/workflows/build-frontend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: frontend-assets-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/custom-template'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install and verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
+      - name: Commit generated assets
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          test -s src/dagsmith/static/dagsmith.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f src/dagsmith/static/
+          if git diff --cached --quiet; then
+            echo 'Frontend assets are already up to date.'
+            exit 0
+          fi
+          git commit -m 'build: update packaged frontend assets'
+          git push origin "HEAD:$TARGET_BRANCH"

@@ -15,7 +15,7 @@ def _fast_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         validation,
         "check_import",
-        lambda source: ([], 1),
+        lambda source, import_paths=None: ([], 1),
     )
 
 
@@ -244,3 +244,31 @@ def test_unauthenticated_request_is_401(migrated_db: str) -> None:
         response = client.get("/api/v1/drafts")
     assert response.status_code == 401
     assert response.json()["code"] == "unauthorized"
+
+
+def test_unchanged_save_does_not_add_history(api_client):
+    draft = _create_draft(api_client, "unchanged.py")
+    body = {
+        "source": draft["source"], "layout": draft["layout"],
+        "expected_head_version_no": 1, "kind": "manual",
+    }
+    response = api_client.put(f"/api/v1/drafts/{draft['id']}/versions", json=body)
+    assert response.status_code == 200
+    assert response.json()["version_no"] == 1
+    assert len(api_client.get(f"/api/v1/drafts/{draft['id']}/versions").json()) == 1
+
+
+def test_delete_history_preserves_head_and_numbering(api_client):
+    draft = _create_draft(api_client, "delete_history.py")
+    base = f"/api/v1/drafts/{draft['id']}"
+    response = api_client.put(f"{base}/versions", json={
+        "source": "x = 1\n", "expected_head_version_no": 1,
+    })
+    assert response.status_code == 200
+    assert api_client.delete(f"{base}/versions/2").status_code == 400
+    assert api_client.delete(f"{base}/versions/1").status_code == 204
+    assert api_client.get(f"{base}/versions/1").status_code == 404
+    response = api_client.put(f"{base}/versions", json={
+        "source": "x = 2\n", "expected_head_version_no": 2,
+    })
+    assert response.json()["version_no"] == 3

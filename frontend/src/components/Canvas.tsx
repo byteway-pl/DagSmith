@@ -28,25 +28,24 @@ import { Modal } from "src/components/Modal";
 import { DRAG_MIME } from "src/components/Palette";
 import { useStore } from "src/state/store";
 
-// Visual language ported from the original standalone DagSmith app:
-// dark slate canvas, horizontal task cards with a typed icon square,
-// smoothstep edges with arrowheads, blue selection glow, dashed group frames.
+// Use the host Chakra semantic tokens so changes to Airflow's theme apply
+// immediately, including inside React Flow's SVG labels and controls.
 const C = {
-  canvas: "#0f172a",
-  dots: "#475569",
-  card: "#0f172a",
-  cardSelected: "#1e293b",
-  border: "#475569",
-  borderSelected: "#3b82f6",
-  iconBox: "#1e293b",
-  iconBoxBorder: "#334155",
-  handle: "#64748b",
-  handleSelected: "#3b82f6",
-  edge: "#64748b",
-  subText: "#64748b",
-  subTextSelected: "#60a5fa",
-  groupText: "#93c5fd",
-  groupFrame: "#93c5fd",
+  canvas: "var(--chakra-colors-bg)",
+  dots: "var(--chakra-colors-border-emphasized)",
+  card: "var(--chakra-colors-bg-panel)",
+  cardSelected: "var(--chakra-colors-bg-emphasized)",
+  border: "var(--chakra-colors-border-emphasized)",
+  borderSelected: "var(--chakra-colors-blue-solid)",
+  iconBox: "var(--chakra-colors-bg-muted)",
+  iconBoxBorder: "var(--chakra-colors-border)",
+  handle: "var(--chakra-colors-fg-muted)",
+  handleSelected: "var(--chakra-colors-blue-solid)",
+  edge: "var(--chakra-colors-fg-muted)",
+  subText: "var(--chakra-colors-fg-muted)",
+  subTextSelected: "var(--chakra-colors-blue-fg)",
+  groupText: "var(--chakra-colors-blue-fg)",
+  groupFrame: "var(--chakra-colors-blue-fg)",
 };
 
 // Estimated card size used for group frames and drop-into-frame hit tests
@@ -69,7 +68,7 @@ const handleStyle = (selected: boolean, side: "left" | "right") => ({
   width: 12,
   height: 12,
   borderRadius: "50%",
-  border: "2px solid #0f172a",
+  border: `2px solid ${C.card}`,
   background: selected ? C.handleSelected : C.handle,
   [side]: -6,
 });
@@ -117,7 +116,7 @@ const TaskNodeView: FC<NodeProps<TaskRFNode>> = ({ data }) => {
       </Flex>
 
       <Box flex="1" minW="0">
-        <Text fontSize="sm" fontWeight="bold" color="white" lineHeight="tight" wordBreak="break-word">
+        <Text fontSize="sm" fontWeight="bold" color="fg" lineHeight="tight" wordBreak="break-word">
           {data.taskId}
         </Text>
         <Text
@@ -147,7 +146,7 @@ const groupHandleStyle = {
   width: 14,
   height: 14,
   borderRadius: "50%",
-  border: "2px solid #0f172a",
+  border: `2px solid ${C.card}`,
   background: C.groupFrame,
   pointerEvents: "all" as const,
 };
@@ -192,8 +191,8 @@ const toRfEdges = (graph: GraphModel): RFEdge[] =>
     source: edge.source,
     target: edge.target,
     label: edge.label ?? undefined,
-    labelStyle: { fill: "#93c5fd", fontSize: 11, fontWeight: 600 },
-    labelBgStyle: { fill: "#1e293b", stroke: "#334155" },
+    labelStyle: { fill: C.groupText, fontSize: 11, fontWeight: 600 },
+    labelBgStyle: { fill: C.iconBox, stroke: C.iconBoxBorder },
     labelBgPadding: [6, 3] as [number, number],
     labelBgBorderRadius: 6,
   }));
@@ -648,6 +647,10 @@ export const Canvas: FC = () => {
       w="100%"
       position="relative"
       css={{
+        "--xy-background-color": C.canvas,
+        "--xy-node-color": "var(--chakra-colors-fg)",
+        "--xy-minimap-background-color": C.cardSelected,
+        "--xy-minimap-mask-background-color": "color-mix(in srgb, var(--chakra-colors-bg) 70%, transparent)",
         "& .react-flow__controls": {
           background: C.cardSelected,
           border: `1px solid ${C.iconBoxBorder}`,
@@ -658,11 +661,11 @@ export const Canvas: FC = () => {
         "& .react-flow__controls-button": {
           background: C.cardSelected,
           borderBottom: `1px solid ${C.iconBoxBorder}`,
-          color: "#94a3b8",
+          color: "var(--chakra-colors-fg-muted)",
         },
         "& .react-flow__controls-button:hover": {
           background: C.iconBoxBorder,
-          color: "white",
+          color: "var(--chakra-colors-fg)",
         },
         "& .react-flow__controls-button svg": {
           fill: "currentColor",
@@ -777,7 +780,7 @@ export const Canvas: FC = () => {
             borderRadius: 8,
           }}
           nodeColor={C.border}
-          maskColor="rgba(15, 23, 42, 0.7)"
+          maskColor="color-mix(in srgb, var(--chakra-colors-bg) 70%, transparent)"
         />
       </ReactFlow>
 
@@ -837,7 +840,7 @@ export const Canvas: FC = () => {
                 gap={4}
                 justify="space-between"
                 cursor="pointer"
-                color="#e2e8f0"
+                color="fg"
                 fontSize="sm"
                 _hover={{ bg: C.iconBoxBorder }}
                 onClick={() => {

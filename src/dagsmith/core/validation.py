@@ -13,6 +13,7 @@ import ast
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from dagsmith.api.schemas import ValidateResult, ValidationIssue
 from dagsmith.config import get_int
@@ -33,12 +34,19 @@ def check_syntax(source: str) -> list[ValidationIssue]:
     return []
 
 
-def check_import(source: str) -> tuple[list[ValidationIssue], int | None]:
+def check_import(
+    source: str, import_paths: list[Path] | None = None
+) -> tuple[list[ValidationIssue], int | None]:
     """Run the import check in a subprocess. Returns (issues, dag_count)."""
     timeout = get_int("validation_timeout")
     try:
         proc = subprocess.run(
-            [sys.executable, "-m", "dagsmith.core.validation_worker"],
+            [
+                sys.executable,
+                "-m",
+                "dagsmith.core.validation_worker",
+                *[str(path) for path in (import_paths or [])],
+            ],
             input=source,
             capture_output=True,
             text=True,
@@ -46,11 +54,7 @@ def check_import(source: str) -> tuple[list[ValidationIssue], int | None]:
         )
     except subprocess.TimeoutExpired:
         return (
-            [
-                ValidationIssue(
-                    message=f"Validation timed out after {timeout}s", kind="timeout"
-                )
-            ],
+            [ValidationIssue(message=f"Validation timed out after {timeout}s", kind="timeout")],
             None,
         )
 
@@ -69,17 +73,19 @@ def check_import(source: str) -> tuple[list[ValidationIssue], int | None]:
     return issues, payload.get("dag_count")
 
 
-def validate_source(source: str, deep: bool = True) -> ValidateResult:
+def validate_source(
+    source: str, deep: bool = True, import_paths: list[Path] | None = None
+) -> ValidateResult:
     issues = check_syntax(source)
     if issues:
         return ValidateResult(ok=False, errors=issues)
 
     dag_count: int | None = None
     if deep:
-        import_issues, dag_count = check_import(source)
+        import_issues, dag_count = (
+            check_import(source, import_paths) if import_paths else check_import(source)
+        )
         issues.extend(import_issues)
         if dag_count == 0 and not issues:
-            issues.append(
-                ValidationIssue(message="File defines no DAG", kind="dag")
-            )
+            issues.append(ValidationIssue(message="File defines no DAG", kind="dag"))
     return ValidateResult(ok=not issues, errors=issues, dag_count=dag_count)

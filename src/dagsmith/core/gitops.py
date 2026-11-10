@@ -52,9 +52,7 @@ def _normalize_remote(url: str) -> str | None:
     return url if url.startswith("http") else None
 
 
-def remote_commit_url(
-    bundle: BundleRef, sha: str, remote_url: str | None = None
-) -> str | None:
+def remote_commit_url(bundle: BundleRef, sha: str, remote_url: str | None = None) -> str | None:
     """Web URL of a commit for github/gitlab-style remotes (best effort)."""
     if remote_url is None:
         try:
@@ -92,12 +90,18 @@ def push_head(
 
 
 def commit_deploy(
-    bundle: BundleRef, rel_path: str, user: str | None, message: str, push: bool
+    bundle: BundleRef,
+    rel_path: str,
+    user: str | None,
+    message: str,
+    push: bool,
+    author_name: str | None = None,
+    author_email: str | None = None,
 ) -> GitResult:
     """Commit (and optionally push) a deployed file. Never raises."""
     root = str(bundle.root)
-    author_name = user or "dagsmith"
-    author_email = f"{author_name}@dagsmith.local"
+    author_name = author_name or user or "dagsmith"
+    author_email = author_email or f"{user or 'dagsmith'}@dagsmith.local"
     try:
         add = _git(root, "add", "--", rel_path)
         if add.returncode != 0:

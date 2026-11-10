@@ -13,7 +13,7 @@ from dagsmith.core.storage import BundleRef
 
 @pytest.fixture(autouse=True)
 def _fast_validation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(validation, "check_import", lambda source: ([], 1))
+    monkeypatch.setattr(validation, "check_import", lambda source, import_paths=None: ([], 1))
 
 
 def _git_bundle(tmp_path: Path) -> BundleRef:
@@ -83,3 +83,68 @@ def test_deploy_with_git_and_audit_endpoint(
     # bundle listing reports the git flag
     bundles = api_client.get("/api/v1/bundles").json()
     assert bundles[0]["git"] is True
+
+
+def test_commit_uses_fab_profile(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from dagsmith.api.security import ApiUser
+
+    user = ApiUser(
+        "alice",
+        SimpleNamespace(
+            first_name="Alice",
+            last_name="Smith",
+            email="alice@example.com",
+        ),
+    )
+    bundle = _git_bundle(tmp_path)
+    (bundle.root / "dag.py").write_text("x = 1\n")
+    result = gitops.commit_deploy(
+        bundle,
+        "dag.py",
+        user.username,
+        "profile identity",
+        push=False,
+        author_name=user.git_name,
+        author_email=user.git_email,
+    )
+    assert result.error is None
+    identity = subprocess.run(
+        ["git", "-C", str(bundle.root), "log", "-1", "--format=%an|%ae|%cn|%ce"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert identity == "Alice Smith|alice@example.com|Alice Smith|alice@example.com"
+
+
+def test_git_profile_fallback() -> None:
+    from dagsmith.api.security import ApiUser
+
+    user = ApiUser("alice", object())
+    assert user.git_name == "alice"
+    assert user.git_email is None
+
+
+@pytest.mark.parametrize("message", ["Custom deployment message", "   "])
+def test_git_push_custom_message(api_client, bundle_dir, monkeypatch, message):
+    subprocess.run(["git", "init", "-q", "-b", "main", str(bundle_dir)], check=True)
+    (bundle_dir / "message.py").write_text("x = 1\n")
+    draft = api_client.post(
+        "/api/v1/drafts",
+        json={
+            "bundle": "test",
+            "rel_path": "message.py",
+        },
+    ).json()
+    monkeypatch.setattr(gitops, "push_head", lambda *args: (True, None))
+    response = api_client.post(f"/api/v1/drafts/{draft['id']}/git-push", json={"message": message})
+    assert response.status_code == 200, response.text
+    actual = subprocess.run(
+        ["git", "-C", str(bundle_dir), "log", "-1", "--format=%B"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert actual == (message.strip() or "dagsmith: update message.py (draft v1)")

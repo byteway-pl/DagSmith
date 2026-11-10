@@ -13,7 +13,7 @@ from dagsmith.core import validation
 
 @pytest.fixture(autouse=True)
 def _fast_validation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(validation, "check_import", lambda source: ([], 1))
+    monkeypatch.setattr(validation, "check_import", lambda source, import_paths=None: ([], 1))
 
 
 @pytest.fixture

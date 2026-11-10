@@ -13,6 +13,7 @@ from dagsmith.api.schemas import (
     DraftCreate,
     DraftDetail,
     DraftSummary,
+    GitPushRequest,
     GitPushResult,
     VersionCreate,
     VersionDetail,
@@ -33,13 +34,9 @@ from dagsmith.core.db import Draft, Team
 router = APIRouter(tags=["drafts"])
 
 
-def _ensure_access(
-    session: orm.Session, user: ApiUser, bundle: str, rel_path: str
-) -> Team | None:
+def _ensure_access(session: orm.Session, user: ApiUser, bundle: str, rel_path: str) -> Team | None:
     """Team-ownership gate on top of the global permission checks."""
-    return teams_core.ensure_file_access(
-        session, bundle, rel_path, user.username, is_admin(user)
-    )
+    return teams_core.ensure_file_access(session, bundle, rel_path, user.username, is_admin(user))
 
 
 def _detail(session: orm.Session, draft: Draft) -> DraftDetail:
@@ -84,6 +81,7 @@ def create_or_open_draft(
         body.rel_path,
         user.username,
         team_name=team.name if team else None,
+        template_id=body.template_id,
     )
     session.flush()
     return _detail(session, draft)
@@ -185,6 +183,7 @@ def restore_version(
 @router.post("/drafts/{draft_id}/git-push")
 def git_push(
     draft_id: str,
+    body: GitPushRequest | None = None,
     user: ApiUser = Depends(require_deploy),
     session: orm.Session = Depends(db_session),
 ) -> GitPushResult:
@@ -199,8 +198,11 @@ def git_push(
         bundle_ref,
         draft.rel_path,
         user.username,
-        message=f"dagsmith: update {draft.rel_path} (draft v{head.version_no})",
+        message=(body.message.strip() if body and body.message else "")
+        or f"dagsmith: update {draft.rel_path} (draft v{head.version_no})",
         push=False,
+        author_name=user.git_name,
+        author_email=user.git_email,
     )
     # Push target: the team's configured repository/branch override, otherwise
     # the bundle checkout's own upstream (its origin).
@@ -255,6 +257,8 @@ def deploy(
         version_no=body.version_no,
         expected_file_hash=body.expected_file_hash,
         user=user.username,
+        author_name=user.git_name,
+        author_email=user.git_email,
     )
     git_sha = git_result.commit_sha if git_result else None
     git_pushed = git_result.pushed if git_result else False
@@ -268,6 +272,8 @@ def deploy(
             user.username,
             message=f"dagsmith: deploy {draft.rel_path} (draft v{version.version_no})",
             push=False,
+            author_name=user.git_name,
+            author_email=user.git_email,
         )
         git_sha = commit_result.commit_sha or git_sha
         if commit_result.error is None:
@@ -284,3 +290,17 @@ def deploy(
         git_pushed=git_pushed,
         git_error=git_error,
     )
+
+
+@router.delete("/drafts/{draft_id}/versions/{version_no}", status_code=204)
+def delete_version(
+    draft_id: str,
+    version_no: int,
+    user: ApiUser = Depends(require_edit),
+    session: orm.Session = Depends(db_session),
+) -> None:
+    draft = drafts_core.get_draft(session, draft_id)
+    _ensure_access(session, user, draft.bundle, draft.rel_path)
+    if version_no == draft.head_version_no:
+        raise BadRequestError("The current head version cannot be deleted")
+    session.delete(drafts_core.get_version(session, draft, version_no))

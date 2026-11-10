@@ -12,11 +12,12 @@ import {
   Text,
 } from "@chakra-ui/react";
 import type { FC } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiGrid, FiList, FiLock, FiSearch, FiUser, FiUsers } from "react-icons/fi";
 
-import { api } from "src/api/client";
+import { api, type DagTemplate } from "src/api/client";
 import type { FileInfo } from "src/api/types";
+import { TemplateManager } from "src/components/TemplateManager";
 import { Modal } from "src/components/Modal";
 import { useStore } from "src/state/store";
 
@@ -134,6 +135,19 @@ export const FileBrowser: FC = () => {
   const teams = useStore((s) => s.teams);
   const selectBundle = useStore((s) => s.selectBundle);
   const openFile = useStore((s) => s.openFile);
+  const [customTemplates, setCustomTemplates] = useState<DagTemplate[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const reloadTemplates = async () => {
+    const items = await api.templates();
+    setCustomTemplates(items);
+    setTemplateId((current) => current.startsWith("custom:") &&
+      !items.some((t) => `custom:${t.id}` === current) ? "blank" : current);
+  };
+  useEffect(() => {
+    if (config?.can_edit) void reloadTemplates().catch((err: unknown) =>
+      useStore.getState().setNotice({ type: "error", text: String(err) }));
+  }, [config?.can_edit]);
+  const [templateId, setTemplateId] = useState("blank");
   const [newPath, setNewPath] = useState("");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewMode>(loadView);
@@ -194,7 +208,7 @@ export const FileBrowser: FC = () => {
       withExt = `${myTeamPrefix}/${withExt}`;
     }
     setNewPath("");
-    void openFile(withExt);
+    void openFile(withExt, false, templateId);
   };
 
   const creator = (f: FileInfo) => f.created_by ?? f.owner;
@@ -248,6 +262,15 @@ export const FileBrowser: FC = () => {
 
       {config?.can_edit ? (
         <HStack>
+          <select aria-label="DAG template" value={templateId}
+            style={{ ...selectStyle, width: "220px" }}
+            onChange={(event) => setTemplateId(event.target.value)}>
+            <option value="blank">Blank DAG</option>
+            <option value="bash">Sequential Bash tasks</option>
+            <option value="parallel">Parallel tasks</option>
+            <option value="taskflow">TaskFlow pipeline</option>
+            {customTemplates.map((t) => <option key={t.id} value={`custom:${t.id}`}>{t.name}</option>)}
+          </select>
           <Input
             size="sm"
             placeholder={myTeamPrefix ? `${myTeamPrefix}/new_dag.py` : "new/path/dag.py"}
@@ -259,6 +282,7 @@ export const FileBrowser: FC = () => {
               }
             }}
           />
+          <Button size="sm" variant="outline" onClick={() => setShowTemplates(true)}>Templates</Button>
           <Button size="sm" onClick={createFile} disabled={!newPath.trim()}>
             New DAG
           </Button>
@@ -425,6 +449,8 @@ export const FileBrowser: FC = () => {
         )}
       </Box>
 
+      {showTemplates ? <TemplateManager templates={customTemplates} onChange={reloadTemplates}
+        onClose={() => setShowTemplates(false)} /> : undefined}
       {changeTeamFor && selectedBundle ? (
         <ChangeTeamModal
           bundle={selectedBundle}

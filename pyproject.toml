@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Adrian Galik" }]
+authors = [{ name = "zjiez" }, { name = "Adrian Galik" }]
+maintainers = [{ name = "zjiez" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Apache Airflow",
@@ -35,8 +36,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/byteway-pl/DagSmith"
-Issues = "https://github.com/byteway-pl/DagSmith/issues"
+Homepage = "https://github.com/zjiez/DagSmith"
+Issues = "https://github.com/zjiez/DagSmith/issues"
+Repository = "https://github.com/zjiez/DagSmith"
+Changelog = "https://github.com/zjiez/DagSmith/blob/main/README.md#021"
 
 [project.entry-points."airflow.plugins"]
 dagsmith = "dagsmith.plugin:DagSmithPlugin"

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The store schedules a debounced codegen after graph mutations — stub the
 // whole API client so nothing hits the network.
@@ -127,5 +127,38 @@ describe("grouping", () => {
     expect(graph().nodes.find((n) => n.id === "a")!.position).toEqual({ x: 15, y: 7 });
     // non-member untouched
     expect(graph().nodes.find((n) => n.id === "b")!.position).toEqual({ x: 20, y: 0 });
+  });
+});
+
+describe("autosave preference and leaving the editor", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  it("persists the autosave preference", () => {
+    useStore.getState().setAutosaveEnabled(false);
+    expect(useStore.getState().autosaveEnabled).toBe(false);
+    expect(localStorage.getItem("dagsmith:autosave")).toBe("off");
+    useStore.getState().setAutosaveEnabled(true);
+    expect(localStorage.getItem("dagsmith:autosave")).toBe("on");
+  });
+
+  it("keeps edits when leaving is cancelled", () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirm);
+    useStore.setState({ dirty: true, source: "unsaved", saving: false });
+    useStore.getState().closeFile();
+    expect(useStore.getState().source).toBe("unsaved");
+    expect(useStore.getState().dirty).toBe(true);
+    expect(confirm).toHaveBeenCalledOnce();
+  });
+
+  it("discards edits when leaving is confirmed", () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal("confirm", confirm);
+    useStore.setState({ dirty: true, source: "unsaved", saving: false });
+    useStore.getState().closeFile();
+    expect(useStore.getState().source).toBe("");
+    expect(useStore.getState().dirty).toBe(false);
+    expect(confirm).toHaveBeenCalledOnce();
   });
 });

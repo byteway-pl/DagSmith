@@ -180,3 +180,11 @@ def session_scope(url: str | None = None) -> Iterator[orm.Session]:
         raise
     finally:
         session.close()
+
+class DagTemplate(Base):
+    __tablename__ = "dagsmith_template"
+
+    id = sa.Column(sa.String(36), primary_key=True, default=_new_uuid)
+    owner = sa.Column(sa.String(250), nullable=False, index=True)
+    name = sa.Column(sa.String(100), nullable=False)
+    source = sa.Column(sa.Text, nullable=False)

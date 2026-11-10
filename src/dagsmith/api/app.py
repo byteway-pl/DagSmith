@@ -22,6 +22,7 @@ from dagsmith.api.routes import (
     graph,
     health,
     teams,
+    templates,
     validate,
 )
 from dagsmith.config import get_bool
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
         catalog.router,
         audit.router,
         teams.router,
+        templates.router,
     ):
         app.include_router(router, prefix="/api/v1")
 
